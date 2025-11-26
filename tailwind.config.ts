@@ -47,6 +47,11 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        telegram: {
+          blue: "hsl(var(--telegram-blue))",
+          green: "hsl(var(--telegram-green))",
+          bg: "hsl(var(--telegram-bg))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
