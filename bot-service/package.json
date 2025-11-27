@@ -1,0 +1,31 @@
+{
+  "name": "telegram-bot-service",
+  "version": "1.0.0",
+  "description": "Independent Telegram Bot Service with multi-bot support and message routing",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "pm2:start": "pm2 start src/index.js --name telegram-bot-service",
+    "pm2:stop": "pm2 stop telegram-bot-service",
+    "pm2:restart": "pm2 restart telegram-bot-service",
+    "pm2:logs": "pm2 logs telegram-bot-service"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "multi-bot",
+    "message-routing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "telegraf": "^4.15.0",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
