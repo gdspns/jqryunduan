@@ -2,18 +2,15 @@
   "name": "telegram-bot-api",
   "version": "1.0.0",
   "description": "Backend API for Telegram Bot Manager",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "pg": "^8.11.3",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.1.2",
-    "dotenv": "^16.3.1",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5"
+    "express": "4.18.2",
+    "cors": "2.8.5",
+    "pg": "8.11.3",
+    "bcryptjs": "2.4.3",
+    "jsonwebtoken": "9.1.2"
   }
 }
