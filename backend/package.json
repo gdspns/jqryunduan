@@ -1,0 +1,13 @@
+{
+  "name": "telegram-bot-api",
+  "version": "1.0.0",
+  "description": "Backend API for Telegram Bot Manager",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
