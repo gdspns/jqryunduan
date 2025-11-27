@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const pool = require('./db');
-const initDatabase = require('./init-db');
 const authRoutes = require('./routes/auth');
 require('dotenv').config();
 
@@ -17,6 +16,18 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// 初始化数据库路由（手动触发）
+app.post('/api/init-db', async (req, res) => {
+  try {
+    const initDatabase = require('./init-db');
+    await initDatabase();
+    res.json({ message: 'Database initialized successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 路由
 app.use('/api/auth', authRoutes);
 
@@ -26,12 +37,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message });
 });
 
-// 启动服务器并初始化数据库
+// 启动服务器
 const startServer = async () => {
   try {
-    // 初始化数据库
-    await initDatabase();
-    
     app.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
     });
