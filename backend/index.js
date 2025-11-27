@@ -1,5 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config();
+
 const { pool, initializeDatabase } = require('./db');
 const { register, login, verifyToken, getCurrentUser } = require('./auth');
 
@@ -7,8 +11,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 中间件
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+// 速率限制
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100
+});
+app.use('/api/', limiter);
 
 // 认证中间件
 const authMiddleware = (req, res, next) => {
