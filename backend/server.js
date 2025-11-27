@@ -5,11 +5,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
-console.log('Starting API server...');
-console.log('DATABASE_URL:', process.env.DATABASE_URL ? '✓ Set' : '✗ Not set');
+console.log('Starting API server on port', PORT);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@postgresql:5432/postgres',
@@ -25,13 +24,13 @@ pool.on('error', (err) => {
 app.use(cors());
 app.use(express.json());
 
-// 初始化数据库
-async function initDB() {
+let dbReady = false;
+
+async function ensureDB() {
+  if (dbReady) return;
   let client;
   try {
-    console.log('Connecting to database...');
     client = await pool.connect();
-    console.log('✓ Connected to database');
     
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -43,23 +42,62 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('✓ Users table ready');
     
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS bots (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        bot_token VARCHAR(255) UNIQUE NOT NULL,
+        bot_name VARCHAR(100) NOT NULL,
+        developer_id VARCHAR(50),
+        welcome_message TEXT,
+        status VARCHAR(20) DEFAULT 'active',
+        trial_messages_sent INT DEFAULT 0,
+        is_authorized BOOLEAN DEFAULT FALSE,
+        expiry_date TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS activation_links (
+        id SERIAL PRIMARY KEY,
+        bot_token VARCHAR(255) UNIQUE NOT NULL,
+        activation_code VARCHAR(100) UNIQUE NOT NULL,
+        is_used BOOLEAN DEFAULT FALSE,
+        expiry_date TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id SERIAL PRIMARY KEY,
+        bot_id INTEGER REFERENCES bots(id) ON DELETE CASCADE,
+        telegram_user_id VARCHAR(50) NOT NULL,
+        telegram_username VARCHAR(100),
+        direction VARCHAR(20) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    dbReady = true;
+    console.log('Database tables ready');
     client.release();
   } catch (error) {
-    console.error('DB init error:', error.message);
-    if (client) client.release();
-    throw error;
+    console.error('DB error:', error.message);
   }
 }
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', db: dbReady });
 });
 
 app.post('/api/auth/register', async (req, res) => {
   let client;
   try {
+    await ensureDB();
     const { username, password, email } = req.body;
     
     if (!username || !password) {
@@ -67,18 +105,13 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     client = await pool.connect();
-
-    // 检查用户是否存在
     const check = await client.query('SELECT id FROM users WHERE username = $1', [username]);
     if (check.rows.length > 0) {
       client.release();
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // 加密密码
     const hash = await bcrypt.hash(password, 10);
-
-    // 创建用户
     const result = await client.query(
       'INSERT INTO users (username, password_hash, email) VALUES ($1, $2, $3) RETURNING id, username, email',
       [username, hash, email || null]
@@ -99,6 +132,7 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   let client;
   try {
+    await ensureDB();
     const { username, password } = req.body;
     
     if (!username || !password) {
@@ -106,8 +140,6 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     client = await pool.connect();
-
-    // 查找用户
     const result = await client.query('SELECT * FROM users WHERE username = $1', [username]);
     if (result.rows.length === 0) {
       client.release();
@@ -115,8 +147,6 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-
-    // 验证密码
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       client.release();
@@ -137,6 +167,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', async (req, res) => {
   let client;
   try {
+    await ensureDB();
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
       return res.status(401).json({ error: 'No token' });
@@ -165,16 +196,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message });
 });
 
-async function start() {
-  try {
-    await initDB();
-    app.listen(PORT, () => {
-      console.log(`✅ Server running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error('Failed to start:', error);
-    process.exit(1);
-  }
-}
-
-start();
+app.listen(PORT, () => {
+  console.log('Server running on port', PORT);
+  ensureDB().catch(err => console.error('Background DB init failed:', err));
+});
