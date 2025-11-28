@@ -2,82 +2,75 @@ version: '3.8'
 
 services:
   # PostgreSQL 数据库
-  postgres:
+  db:
     image: postgres:15-alpine
     container_name: telegram-bot-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: telegram_bot_system
-      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
     networks:
       - bot-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # 后端 API 服务
+  # API 服务器
   api:
-    image: node:18-alpine
+    build: ./api-server
     container_name: telegram-bot-api
     restart: unless-stopped
-    working_dir: /app
+    ports:
+      - "3000:3000"
     environment:
-      NODE_ENV: production
-      PORT: 3000
-      DATABASE_URL: postgresql://${DB_USER:-admin}:${DB_PASSWORD}@postgres:5432/telegram_bot_system
-      JWT_SECRET: ${JWT_SECRET}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-qqai18301}
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    command: sh -c "npm install && node src/index.js"
+      - PORT=3000
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - BOT_SERVICE_WS_URL=ws://bot-service:3001
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
     networks:
       - bot-network
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Telegram Bot 独立服务
+  # Bot 服务
   bot-service:
-    image: node:18-alpine
+    build: ./bot-service
     container_name: telegram-bot-service
     restart: unless-stopped
-    working_dir: /app
+    ports:
+      - "3001:3001"
     environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://${DB_USER:-admin}:${DB_PASSWORD}@postgres:5432/telegram_bot_system
-      API_URL: http://api:3000
-    volumes:
-      - ./bot-service:/app
-      - /app/node_modules
-    command: sh -c "npm install && node src/index.js"
+      - PORT=3001
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
     depends_on:
-      postgres:
-        condition: service_healthy
-      api:
+      db:
         condition: service_healthy
     networks:
       - bot-network
 
-  # Nginx 前端服务
+  # Nginx 前端
   frontend:
     image: nginx:alpine
     container_name: telegram-bot-frontend
     restart: unless-stopped
     volumes:
-      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./dist:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
