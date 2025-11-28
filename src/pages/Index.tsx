@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Bot, MessageSquare, Shield, Zap, Send } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -33,16 +33,20 @@ const Index = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await apiRequest('/bots/trial', {
-        method: 'POST',
-        body: JSON.stringify({
+      const { data, error } = await supabase
+        .from('trial_bots')
+        .insert({
           bot_token: botToken,
           developer_id: developerId,
           welcome_message: welcomeMessage || '欢迎使用！这是试用模式，您有20条免费消息。',
-        }),
-      });
+          message_count: 0,
+        })
+        .select()
+        .single();
 
-      setBotId(response.bot_id);
+      if (error) throw error;
+
+      setBotId(data.id);
       toast({
         title: '成功',
         description: '试用已开始！您可以发送20条消息进行测试。',
@@ -75,16 +79,21 @@ const Index = () => {
     setTrialMessages(prev => [...prev, { role: 'user', content: userMessage }]);
 
     try {
-      const response = await apiRequest('/bots/trial/message', {
-        method: 'POST',
-        body: JSON.stringify({
-          bot_id: botId,
-          message: userMessage,
-        }),
-      });
+      // 更新消息计数
+      const { data, error } = await supabase
+        .from('trial_bots')
+        .update({ message_count: messageCount + 1 })
+        .eq('id', botId)
+        .select()
+        .single();
 
-      setMessageCount(response.message_count);
-      setTrialMessages(prev => [...prev, { role: 'bot', content: response.reply || '消息已发送到 Telegram' }]);
+      if (error) throw error;
+
+      setMessageCount(data.message_count);
+      setTrialMessages(prev => [...prev, { 
+        role: 'bot', 
+        content: '消息已记录！实际的 Telegram 机器人需要连接 bot-service 才能发送消息。' 
+      }]);
 
       // 自动滚动到底部
       setTimeout(() => {
@@ -94,11 +103,11 @@ const Index = () => {
         }
       }, 100);
 
-      if (response.message_count >= 20) {
+      if (data.message_count >= 20) {
         setTimeout(() => {
           toast({
             title: '试用已结束',
-            description: '您已使用完20条免费消息。请联系管理员激活授权以继续使用。',
+            description: '您已使用完20条免费消息。请注册并联系管理员激活授权以继续使用。',
             variant: 'destructive',
           });
         }, 1000);
