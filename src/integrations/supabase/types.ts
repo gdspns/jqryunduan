@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       bots: {
         Row: {
+          activation_code: string | null
           bot_name: string | null
           bot_token: string
           created_at: string | null
@@ -27,6 +28,7 @@ export type Database = {
           welcome_message: string | null
         }
         Insert: {
+          activation_code?: string | null
           bot_name?: string | null
           bot_token: string
           created_at?: string | null
@@ -38,6 +40,7 @@ export type Database = {
           welcome_message?: string | null
         }
         Update: {
+          activation_code?: string | null
           bot_name?: string | null
           bot_token?: string
           created_at?: string | null
@@ -110,6 +113,7 @@ export type Database = {
           developer_id: string
           id: string
           message_count: number | null
+          used_tokens: string[] | null
           welcome_message: string | null
         }
         Insert: {
@@ -118,6 +122,7 @@ export type Database = {
           developer_id: string
           id?: string
           message_count?: number | null
+          used_tokens?: string[] | null
           welcome_message?: string | null
         }
         Update: {
@@ -126,6 +131,7 @@ export type Database = {
           developer_id?: string
           id?: string
           message_count?: number | null
+          used_tokens?: string[] | null
           welcome_message?: string | null
         }
         Relationships: []
@@ -156,6 +162,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_activation_code: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
