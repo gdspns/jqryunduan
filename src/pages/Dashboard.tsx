@@ -5,26 +5,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { apiRequest } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { Bot, LogOut, MessageSquare, Settings, Plus } from 'lucide-react';
+import { Bot, LogOut, Plus, ArrowLeft } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface Bot {
+interface BotData {
   id: string;
-  botToken: string;
-  botName: string;
-  welcomeMessage: string;
-  status: 'active' | 'stopped' | 'expired';
-  trialMessagesSent: number;
-  isAuthorized: boolean;
-  expiryDate: string | null;
-  createdAt: string;
+  bot_token: string;
+  bot_name: string;
+  welcome_message: string;
+  status: string;
+  developer_id: string;
+  expires_at: string | null;
+  activation_code: string | null;
+  created_at: string;
 }
 
 const Dashboard = () => {
-  const [bots, setBots] = useState<Bot[]>([]);
+  const [bots, setBots] = useState<BotData[]>([]);
   const [isAddingBot, setIsAddingBot] = useState(false);
   const [newBot, setNewBot] = useState({
     botToken: '',
@@ -34,15 +35,26 @@ const Dashboard = () => {
   });
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
-    loadBots();
-  }, []);
+    if (user) {
+      loadBots();
+    }
+  }, [user]);
 
   const loadBots = async () => {
+    if (!user) return;
+
     try {
-      const data = await apiRequest('/bots');
-      setBots(data);
+      const { data, error } = await supabase
+        .from('bots')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setBots(data || []);
     } catch (error: any) {
       toast({
         title: '加载失败',
@@ -54,17 +66,27 @@ const Dashboard = () => {
 
   const handleAddBot = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+
     setIsAddingBot(true);
 
     try {
-      await apiRequest('/bots', {
-        method: 'POST',
-        body: JSON.stringify(newBot),
-      });
+      const { error } = await supabase
+        .from('bots')
+        .insert({
+          bot_token: newBot.botToken,
+          bot_name: newBot.botName,
+          developer_id: newBot.developerId,
+          welcome_message: newBot.welcomeMessage,
+          user_id: user.id,
+          status: 'inactive',
+        });
+
+      if (error) throw error;
 
       toast({
         title: '添加成功',
-        description: '机器人已添加，可免费试用20条消息',
+        description: '机器人已添加，请等待管理员激活授权。',
       });
 
       setNewBot({
@@ -86,25 +108,19 @@ const Dashboard = () => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
+  const handleLogout = async () => {
+    await signOut();
     navigate('/login');
   };
 
-  const getStatusBadge = (bot: Bot) => {
-    if (!bot.isAuthorized && bot.trialMessagesSent >= 20) {
-      return <Badge variant="destructive">试用已结束</Badge>;
-    }
-    if (!bot.isAuthorized) {
-      return <Badge variant="secondary">试用中 ({bot.trialMessagesSent}/20)</Badge>;
-    }
+  const getStatusBadge = (bot: BotData) => {
     if (bot.status === 'active') {
       return <Badge className="bg-telegram-green">已授权</Badge>;
     }
     if (bot.status === 'expired') {
       return <Badge variant="destructive">已过期</Badge>;
     }
-    return <Badge variant="outline">已停止</Badge>;
+    return <Badge variant="outline">待激活</Badge>;
   };
 
   return (
@@ -112,6 +128,9 @@ const Dashboard = () => {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
             <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
               <Bot className="w-6 h-6 text-primary-foreground" />
             </div>
@@ -137,7 +156,7 @@ const Dashboard = () => {
               <DialogHeader>
                 <DialogTitle>添加新机器人</DialogTitle>
                 <DialogDescription>
-                  配置您的 Telegram 机器人信息，可免费试用20条消息
+                  配置您的 Telegram 机器人信息
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAddBot} className="space-y-4">
@@ -199,9 +218,9 @@ const Dashboard = () => {
                       <Bot className="w-6 h-6 text-primary" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">{bot.botName}</CardTitle>
+                      <CardTitle className="text-lg">{bot.bot_name}</CardTitle>
                       <CardDescription className="text-xs">
-                        创建于 {new Date(bot.createdAt).toLocaleDateString()}
+                        创建于 {new Date(bot.created_at).toLocaleDateString()}
                       </CardDescription>
                     </div>
                   </div>
@@ -211,21 +230,19 @@ const Dashboard = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">欢迎语:</p>
-                  <p className="text-sm bg-muted p-3 rounded-lg">{bot.welcomeMessage}</p>
+                  <p className="text-sm bg-muted p-3 rounded-lg">{bot.welcome_message}</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1"
-                    onClick={() => navigate(`/chat/${bot.id}`)}
-                    disabled={!bot.isAuthorized && bot.trialMessagesSent >= 20}
-                  >
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    聊天
-                  </Button>
-                  <Button variant="outline" size="icon">
-                    <Settings className="w-4 h-4" />
-                  </Button>
-                </div>
+                {bot.activation_code && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">激活码:</p>
+                    <p className="text-sm font-mono bg-muted p-3 rounded-lg">{bot.activation_code}</p>
+                  </div>
+                )}
+                {bot.expires_at && (
+                  <div className="text-xs text-muted-foreground">
+                    有效期至: {new Date(bot.expires_at).toLocaleDateString()}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

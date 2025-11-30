@@ -4,9 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { apiRequest } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, Bot } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Activate = () => {
   const { code } = useParams();
@@ -21,13 +21,31 @@ const Activate = () => {
     setIsActivating(true);
 
     try {
-      await apiRequest('/auth/activate', {
-        method: 'POST',
-        body: JSON.stringify({
-          activationCode: code,
-          botToken,
-        }),
-      });
+      // 查找具有此激活码的机器人
+      const { data: bot, error: findError } = await supabase
+        .from('bots')
+        .select('*')
+        .eq('activation_code', code)
+        .maybeSingle();
+
+      if (findError) throw findError;
+
+      if (!bot) {
+        throw new Error('激活码无效');
+      }
+
+      // 验证机器人令牌是否匹配
+      if (bot.bot_token !== botToken) {
+        throw new Error('机器人令牌不匹配');
+      }
+
+      // 激活机器人
+      const { error: updateError } = await supabase
+        .from('bots')
+        .update({ status: 'active' })
+        .eq('id', bot.id);
+
+      if (updateError) throw updateError;
 
       setIsActivated(true);
       toast({

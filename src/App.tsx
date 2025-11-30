@@ -7,7 +7,6 @@ import { AuthProvider } from "./contexts/AuthContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Chat from "./pages/Chat";
 import Admin from "./pages/Admin";
 import Activate from "./pages/Activate";
 import NotFound from "./pages/NotFound";
@@ -25,7 +24,6 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/chat/:botId" element={<Chat />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/activate/:code" element={<Activate />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
